@@ -9,13 +9,13 @@ export interface KospiRaw {
 export interface NasdaqRaw {
   ovrs_nmix_prpr: string;      // 현재가
   ovrs_nmix_prdy_ctrt: string; // 전일 대비율
-  prdy_vrss_sign: string;
+  prdy_vrss_sign: string;      // 부호
 }
 
 export interface UsdKrwRaw {
-  ovrs_recr_base_exrt: string; // 현재 환율
-  base_exrt_chng_rate: string; // 변동률
-  exrt_sign: string;           // 부호
+  ovrs_nmix_prpr: string;      // 현재 환율
+  ovrs_nmix_prdy_ctrt: string; // 전일 대비율
+  prdy_vrss_sign: string;      // 부호
 }
 
 function signedChange(ctrt: string, sign: string): number {
@@ -31,6 +31,6 @@ export function mapMacroData(
   return {
     kospiChange: signedChange(kospi.bstp_nmix_prdy_ctrt, kospi.prdy_vrss_sign),
     nasdaqChange: signedChange(nasdaq.ovrs_nmix_prdy_ctrt, nasdaq.prdy_vrss_sign),
-    usdKrwChange: signedChange(usdKrw.base_exrt_chng_rate, usdKrw.exrt_sign),
+    usdKrwChange: signedChange(usdKrw.ovrs_nmix_prdy_ctrt, usdKrw.prdy_vrss_sign),
   };
 }

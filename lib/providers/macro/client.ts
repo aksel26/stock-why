@@ -2,6 +2,7 @@ import type { MarketDataProvider, MacroData } from "../../domain/schema";
 import { getKisToken } from "../kis/auth";
 import { mapMacroData, type KospiRaw, type NasdaqRaw, type UsdKrwRaw } from "./mapper";
 import { log, logError } from "../../utils/logger";
+import { throttleKis } from "../kis/throttle";
 
 function getBaseUrl(): string {
   return process.env.KIS_BASE_URL ?? "https://openapi.koreainvestment.com:9443";
@@ -22,22 +23,24 @@ async function kisGet<T>(
     url.searchParams.set(k, v);
   }
 
-  const res = await fetch(url.toString(), {
-    headers: {
-      authorization: `Bearer ${token}`,
-      appkey: appKey,
-      appsecret: appSecret,
-      tr_id: trId,
-      "Content-Type": "application/json; charset=utf-8",
-    },
+  return throttleKis(async () => {
+    const res = await fetch(url.toString(), {
+      headers: {
+        authorization: `Bearer ${token}`,
+        appkey: appKey,
+        appsecret: appSecret,
+        tr_id: trId,
+        "Content-Type": "application/json; charset=utf-8",
+      },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`KIS macro API error [${trId}]: ${res.status} ${text}`);
+    }
+
+    return res.json() as Promise<T>;
   });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`KIS macro API error [${trId}]: ${res.status} ${text}`);
-  }
-
-  return res.json() as Promise<T>;
 }
 
 export class MacroClient implements MarketDataProvider<MacroData> {
@@ -72,7 +75,7 @@ export class MacroClient implements MarketDataProvider<MacroData> {
         ),
         kisGet<{ output: UsdKrwRaw }>(
           requestId,
-          "/uapi/overseas-price/v1/quotations/inquire-daily-forex",
+          "/uapi/overseas-price/v1/quotations/inquire-daily-ovrs-index",
           {
             FID_COND_MRKT_DIV_CODE: "X",
             FID_INPUT_ISCD: "FX@KRW",
@@ -80,11 +83,13 @@ export class MacroClient implements MarketDataProvider<MacroData> {
             FID_INPUT_DATE_2: dateCompact,
             FID_PERIOD_DIV_CODE: "D",
           },
-          "FHKST03030200"
+          "FHKST03030100"
         ),
       ]);
 
-      return mapMacroData(kospiData.output, nasdaqData.output, usdKrwData.output);
+      const result = mapMacroData(kospiData.output, nasdaqData.output, usdKrwData.output);
+      log(requestId, "macro:success", { kospiChange: result.kospiChange, nasdaqChange: result.nasdaqChange, usdKrwChange: result.usdKrwChange });
+      return result;
     } catch (err) {
       logError(requestId, "macro:fetch failed", err);
       throw err;
