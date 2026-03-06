@@ -17,7 +17,7 @@ function makeParams(overrides: Partial<NormalizeParams> = {}): NormalizeParams {
     short: { shortSellingVolume: 5000, shortChangeRate: 5 },
     credit: { creditBalanceRate: 3 },
     macro: { kospiChange: 0.5, usdKrwChange: 0.1, nasdaqChange: 0.3 },
-    news: { headlines: ["삼성전자 실적 발표"] },
+    news: { headlines: [{ title: "삼성전자 실적 발표" }] },
     disclosures: { disclosures: [{ type: "earnings", title: "2023 4Q 실적" }] },
     ...overrides,
   };
@@ -74,8 +74,8 @@ describe("normalizeContext", () => {
   });
 
   it("maps news headlines correctly", () => {
-    const ctx = normalizeContext(makeParams({ news: { headlines: ["뉴스1", "뉴스2"] } }));
-    expect(ctx.events.news).toEqual(["뉴스1", "뉴스2"]);
+    const ctx = normalizeContext(makeParams({ news: { headlines: [{ title: "뉴스1" }, { title: "뉴스2" }] } }));
+    expect(ctx.events.news).toEqual([{ title: "뉴스1" }, { title: "뉴스2" }]);
   });
 
   it("maps disclosures correctly", () => {
