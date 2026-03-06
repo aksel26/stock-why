@@ -1,12 +1,10 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { type ReactNode } from "react";
 
 export default function Template({ children }: { children: ReactNode }) {
-  const skip =
-    typeof window !== "undefined" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const skip = useReducedMotion();
 
   return (
     <motion.div

@@ -1,14 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 export default function DisclaimerBanner() {
   const [dismissed, setDismissed] = useState(false);
-
-  const skip =
-    typeof window !== "undefined" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const skip = useReducedMotion();
 
   return (
     <AnimatePresence>

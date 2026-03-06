@@ -1,12 +1,7 @@
 "use client";
 
 import { type ReactNode } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-
-function useReducedMotion(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 const none = { duration: 0 };
 

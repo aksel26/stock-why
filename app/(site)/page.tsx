@@ -2,9 +2,10 @@
 
 import SearchBar from "@/components/stock/SearchBar";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { FadeIn, StaggerContainer, StaggerItem } from "@/components/motion";
 import { Globe, BrainCircuit, ArrowRight, BarChart3, Activity } from "lucide-react";
+import { useState, useEffect } from "react";
 
 const POPULAR_STOCKS = [
   { code: "005930", name: "삼성전자", iconBg: "bg-blue-100", iconColor: "text-blue-600", trend: "+2.4%" },
@@ -17,16 +18,16 @@ const POPULAR_STOCKS = [
   { code: "003670", name: "포스코퓨처엠", iconBg: "bg-orange-100", iconColor: "text-orange-600", trend: "-0.2%" },
 ];
 
-function useReducedMotion(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
 export default function HomePage() {
+  const [mounted, setMounted] = useState(false);
   const skip = useReducedMotion();
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   return (
-    <div className="w-full flex flex-col items-center">
+    <div className="w-full flex flex-col items-center overflow-x-hidden">
       {/* Hero Section */}
       <section className="w-full max-w-5xl px-4 pt-24 pb-16 flex flex-col items-center text-center relative overflow-hidden">
         {/* Decorative background blur */}
@@ -41,7 +42,7 @@ export default function HomePage() {
         
         <FadeIn delay={0.2} y={20}>
           <h1 className="text-5xl md:text-7xl font-extrabold leading-tight mb-6 tracking-tight text-gray-900">
-            주가 변동, <br className="md:hidden" />
+            주가 변동, <br />
             이제 <span className="text-transparent bg-clip-text bg-gradient-to-r from-gray-900 to-gray-500 relative inline-block">
               직관적으로
               <svg className="absolute w-full h-3 -bottom-1 left-0 text-[#caff33]/60 -z-10" viewBox="0 0 100 10" preserveAspectRatio="none">
@@ -87,11 +88,11 @@ export default function HomePage() {
         </FadeIn>
         
         <FadeIn delay={0.7} className="w-full relative py-4 -mx-4 px-4 sm:mx-0 sm:px-0">
-          <div style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, black 10%, black 90%, transparent)', maskImage: 'linear-gradient(to right, transparent, black 10%, black 90%, transparent)' }}>
+          <div className="overflow-hidden" style={{ WebkitMaskImage: 'linear-gradient(to right, transparent, black 10%, black 90%, transparent)', maskImage: 'linear-gradient(to right, transparent, black 10%, black 90%, transparent)' }}>
             <motion.div
               className="flex gap-4 w-max"
-              animate={skip ? {} : { x: ["0%", "-50%"] }}
-              transition={skip ? {} : { ease: "linear", duration: 30, repeat: Infinity }}
+              animate={!mounted || skip ? {} : { x: ["0%", "-50%"] }}
+              transition={!mounted || skip ? {} : { ease: "linear", duration: 30, repeat: Infinity }}
             >
               {[...POPULAR_STOCKS, ...POPULAR_STOCKS].map((stock, i) => (
                 <div key={`${stock.code}-${i}`} className="w-[260px] shrink-0">

@@ -6,6 +6,7 @@ import SignalBadges from "@/components/stock/SignalBadges";
 import SupplyOverlayChart from "@/components/stock/SupplyOverlayChart";
 import EventsTimeline from "@/components/stock/EventsTimeline";
 import AiReportCard from "@/components/stock/AiReportCard";
+import TrendSection from "@/components/stock/TrendSection";
 import { AnimatedCardGrid, AnimatedCard } from "@/components/motion/StockPageAnimations";
 import { ArrowLeft, TrendingUp, TrendingDown, Minus } from "lucide-react";
 
@@ -88,6 +89,7 @@ export default async function StockPage({ params }: PageProps) {
                disclosures={context.events.disclosures}
              />
           </div>
+          <TrendSection stockCode={context.stockCode} />
         </AnimatedCard>
       </AnimatedCardGrid>
 

@@ -17,10 +17,16 @@ const DISCLOSURE_COLORS: Record<DisclosureType, string> = {
 interface Disclosure {
   type: DisclosureType;
   title: string;
+  url?: string;
+}
+
+interface NewsItem {
+  title: string;
+  url?: string;
 }
 
 interface EventsTimelineProps {
-  news: string[];
+  news: NewsItem[];
   disclosures: Disclosure[];
 }
 
@@ -45,15 +51,37 @@ export default function EventsTimeline({ news, disclosures }: EventsTimelineProp
               >
                 {DISCLOSURE_LABELS[d.type]}
               </span>
-              <p className="text-sm text-gray-700 leading-snug">{d.title}</p>
+              {d.url ? (
+                <a
+                  href={d.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-gray-700 leading-snug hover:text-blue-600 hover:underline transition-colors"
+                >
+                  {d.title}
+                </a>
+              ) : (
+                <p className="text-sm text-gray-700 leading-snug">{d.title}</p>
+              )}
             </div>
           ))}
-          {news.map((headline, i) => (
+          {news.map((item, i) => (
             <div key={`n-${i}`} className="flex items-start gap-3">
               <span className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
                 뉴스
               </span>
-              <p className="text-sm text-gray-700 leading-snug">{headline}</p>
+              {item.url ? (
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-gray-700 leading-snug hover:text-blue-600 hover:underline transition-colors"
+                >
+                  {item.title}
+                </a>
+              ) : (
+                <p className="text-sm text-gray-700 leading-snug">{item.title}</p>
+              )}
             </div>
           ))}
         </div>
