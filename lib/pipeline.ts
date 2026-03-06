@@ -104,7 +104,7 @@ export async function runAnalysisPipeline(code: string): Promise<AnalysisRespons
   // 2. Fetch all provider data in parallel
   log(requestId, "pipeline:fetch:start", { code, date });
 
-  const [price, supply, short, credit, macro, news, disclosures, avg20Prices] =
+  const [price, supply, short, credit, macro, news, disclosures, dailyResult] =
     await Promise.all([
       providers.price.fetch({ code, date }).catch((err) => {
         logError(requestId, "pipeline:price:fallback", err);
@@ -135,8 +135,9 @@ export async function runAnalysisPipeline(code: string): Promise<AnalysisRespons
         return { disclosures: [] } satisfies DisclosureData;
       }),
       isMock
-        ? Promise.resolve(mockFetchDailyPrices(code))
-        : fetchDailyPrices(code, getBusinessDaysAgo(20), new Date()).catch(() => [] as number[]),
+        ? Promise.resolve({ prices: mockFetchDailyPrices(code), stockName: mockGetStockName(code) })
+        : fetchDailyPrices(code, getBusinessDaysAgo(20), new Date())
+            .catch(() => ({ prices: [] as number[], stockName: undefined as string | undefined })),
     ]);
 
   log(requestId, "pipeline:fetch:done", {
@@ -147,11 +148,11 @@ export async function runAnalysisPipeline(code: string): Promise<AnalysisRespons
     disclosureCount: disclosures.disclosures.length,
   });
 
+  const avg20Prices = dailyResult.prices;
+  const stockName = dailyResult.stockName || code;
+
   // Use today's foreign net buy as trend score (avg20Prices contains closing prices, not supply data)
   const foreignTrendScore = supply.foreignNetBuy;
-
-  // 3. Normalize + run rule engine
-  const stockName = isMock ? mockGetStockName(code) : code;
   const context = normalizeContext({
     code,
     name: stockName,

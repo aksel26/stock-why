@@ -190,11 +190,11 @@ export async function fetchDailyPrices(
   code: string,
   fromDate: Date,
   toDate: Date
-): Promise<number[]> {
+): Promise<{ prices: number[]; stockName?: string }> {
   const requestId = `kis-daily-${code}`;
   log(requestId, "kis:dailyPrices:fetch", { code });
 
-  const data = await kisGet<{ output2: KisDailyPriceRaw[] }>(
+  const data = await kisGet<{ output1?: { hts_kor_isnm?: string }; output2: KisDailyPriceRaw[] }>(
     requestId,
     "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice",
     {
@@ -208,9 +208,10 @@ export async function fetchDailyPrices(
     "FHKST03010100"
   );
 
-  const result = mapKisDailyPrices(data.output2 ?? []);
-  log(requestId, "kis:dailyPrices:success", { code, count: result.length });
-  return result;
+  const prices = mapKisDailyPrices(data.output2 ?? []);
+  const stockName = data.output1?.hts_kor_isnm?.trim() || undefined;
+  log(requestId, "kis:dailyPrices:success", { code, count: prices.length, stockName });
+  return { prices, stockName };
 }
 
 // ── Trend Data: Paginated fetch for period-based time series ──
