@@ -14,8 +14,11 @@ function stripHtmlTags(html: string): string {
 
 export function mapNaverNews(items: NaverNewsItem[]): NewsData {
   const headlines = items
-    .map((item) => stripHtmlTags(item.title))
-    .filter((title) => title.length > 0);
+    .map((item) => ({
+      title: stripHtmlTags(item.title),
+      url: item.originallink || item.link,
+    }))
+    .filter((item) => item.title.length > 0);
 
   return { headlines };
 }

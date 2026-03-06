@@ -14,6 +14,10 @@ interface KisToken {
   expiresAt: number;
 }
 
+// In-memory token cache + singleton promise to prevent concurrent token requests
+let memoryToken: KisToken | null = null;
+let tokenPromise: Promise<KisToken> | null = null;
+
 async function fetchNewToken(requestId: string): Promise<KisToken> {
   const appKey = process.env.KIS_APP_KEY;
   const appSecret = process.env.KIS_APP_SECRET;
@@ -50,17 +54,34 @@ async function fetchNewToken(requestId: string): Promise<KisToken> {
 }
 
 export async function getKisToken(requestId: string): Promise<string> {
+  // 1. Check in-memory cache first (works without Redis)
+  if (memoryToken && memoryToken.expiresAt > Date.now() + 60_000) {
+    return memoryToken.accessToken;
+  }
+
+  // 2. Check Redis cache
   const cached = await getCache<KisToken>(CacheKeys.kisToken());
   if (cached && cached.expiresAt > Date.now() + 60_000) {
+    memoryToken = cached;
     return cached.accessToken;
   }
 
+  // 3. Fetch new token (singleton promise prevents concurrent requests)
+  if (tokenPromise) {
+    const token = await tokenPromise;
+    return token.accessToken;
+  }
+
   try {
-    const token = await fetchNewToken(requestId);
+    tokenPromise = fetchNewToken(requestId);
+    const token = await tokenPromise;
+    memoryToken = token;
     await setCache(CacheKeys.kisToken(), token, CACHE_TTL.KIS_TOKEN);
     return token.accessToken;
   } catch (err) {
     logError(requestId, "kis:auth:getKisToken failed", err);
     throw err;
+  } finally {
+    tokenPromise = null;
   }
 }

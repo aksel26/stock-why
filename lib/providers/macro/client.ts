@@ -61,9 +61,9 @@ export class MacroClient implements MarketDataProvider<MacroData> {
           },
           "FHPUP02100000"
         ),
-        kisGet<{ output: NasdaqRaw }>(
+        kisGet<{ output1: NasdaqRaw }>(
           requestId,
-          "/uapi/overseas-price/v1/quotations/inquire-daily-ovrs-index",
+          "/uapi/overseas-price/v1/quotations/inquire-daily-chartprice",
           {
             FID_COND_MRKT_DIV_CODE: "N",
             FID_INPUT_ISCD: "COMP", // NASDAQ Composite
@@ -73,9 +73,9 @@ export class MacroClient implements MarketDataProvider<MacroData> {
           },
           "FHKST03030100"
         ),
-        kisGet<{ output: UsdKrwRaw }>(
+        kisGet<{ output1: UsdKrwRaw }>(
           requestId,
-          "/uapi/overseas-price/v1/quotations/inquire-daily-ovrs-index",
+          "/uapi/overseas-price/v1/quotations/inquire-daily-chartprice",
           {
             FID_COND_MRKT_DIV_CODE: "X",
             FID_INPUT_ISCD: "FX@KRW",
@@ -87,7 +87,7 @@ export class MacroClient implements MarketDataProvider<MacroData> {
         ),
       ]);
 
-      const result = mapMacroData(kospiData.output, nasdaqData.output, usdKrwData.output);
+      const result = mapMacroData(kospiData.output, nasdaqData.output1, usdKrwData.output1);
       log(requestId, "macro:success", { kospiChange: result.kospiChange, nasdaqChange: result.nasdaqChange, usdKrwChange: result.usdKrwChange });
       return result;
     } catch (err) {

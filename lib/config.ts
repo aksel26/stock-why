@@ -49,8 +49,8 @@ export function getEnv(): Env {
 
 export const CACHE_TTL = {
   CONTEXT_MARKET_OPEN: 5 * 60,       // 5분 (장중)
-  CONTEXT_MARKET_CLOSED: 24 * 60 * 60, // 24시간 (장외)
-  AI_ANALYSIS: 24 * 60 * 60,          // 24시간
+  CONTEXT_MARKET_CLOSED: 60 * 60,       // 1시간 (장외)
+  AI_ANALYSIS: 60 * 60,                // 1시간
   AVG20: 24 * 60 * 60,                // 24시간
   KIS_TOKEN: 23 * 60 * 60,            // 23시간
 } as const;
@@ -71,3 +71,13 @@ export const AI_TRIGGER = {
   VOLATILITY_THRESHOLD: 3,
   MIN_HIGH_SIGNALS: 1,
 } as const;
+
+export const TREND_PERIODS = {
+  "1W": 5,
+  "1M": 22,
+  "3M": 65,
+  "6M": 130,
+  "1Y": 250,
+} as const;
+
+export const KIS_MAX_ITEMS_PER_CALL = 100;

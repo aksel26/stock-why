@@ -1,40 +1,40 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import type { StockDailyContext, AiAnalysis } from "../domain/schema";
 import { log, logError } from "../utils/logger";
 import { getSystemPrompt, getUserPrompt } from "./prompt";
 import { validateAiResponse } from "./schema";
-import { generateFallback } from "./fallback";
 
-const MODEL_NAME = "gemini-1.5-flash";
-const TIMEOUT_MS = 10_000;
 
-function getClient(): GoogleGenerativeAI {
+const MODEL_NAME = "gemini-2.5-flash";
+const TIMEOUT_MS = 30_000;
+
+function getClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
-  return new GoogleGenerativeAI(apiKey);
+  return new GoogleGenAI({ apiKey });
 }
 
 async function callGeminiOnce(userPrompt: string): Promise<AiAnalysis> {
   const client = getClient();
-  const model = client.getGenerativeModel({
-    model: MODEL_NAME,
-    systemInstruction: getSystemPrompt(),
-    generationConfig: {
-      responseMimeType: "application/json",
-      temperature: 0.2,
-      maxOutputTokens: 512,
-    },
-  });
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
-    const result = await model.generateContent(
-      { contents: [{ role: "user", parts: [{ text: userPrompt }] }] },
-      { signal: controller.signal }
-    );
-    const text = result.response.text();
+    const response = await client.models.generateContent({
+      model: MODEL_NAME,
+      contents: userPrompt,
+      config: {
+        systemInstruction: getSystemPrompt(),
+        responseMimeType: "application/json",
+        temperature: 0.2,
+        maxOutputTokens: 8192,
+        thinkingConfig: { thinkingBudget: 0 },
+        abortSignal: controller.signal,
+      },
+    });
+
+    const text = response.text ?? "";
     const json = JSON.parse(text) as unknown;
     const validated = validateAiResponse(json);
     if (!validated) throw new Error("AI response validation failed");
@@ -46,16 +46,18 @@ async function callGeminiOnce(userPrompt: string): Promise<AiAnalysis> {
 
 export async function generateAnalysis(
   requestId: string,
-  context: StockDailyContext
-): Promise<AiAnalysis> {
-  const userPrompt = getUserPrompt(context);
+  context: StockDailyContext,
+  trendSummary?: string
+): Promise<AiAnalysis | null> {
+  const userPrompt = getUserPrompt(context, trendSummary);
 
   try {
     const result = await callGeminiOnce(userPrompt);
     log(requestId, "gemini success", { attempt: 1 });
     return result;
   } catch (err) {
-    logError(requestId, "gemini attempt 1 failed", err);
+    const label = err instanceof DOMException && err.name === "AbortError" ? "timeout" : "error";
+    logError(requestId, `gemini attempt 1 failed (${label})`, err);
   }
 
   try {
@@ -65,9 +67,10 @@ export async function generateAnalysis(
     log(requestId, "gemini success", { attempt: 2 });
     return result;
   } catch (err) {
-    logError(requestId, "gemini attempt 2 failed, using fallback", err);
+    const label = err instanceof DOMException && err.name === "AbortError" ? "timeout" : "error";
+    logError(requestId, `gemini attempt 2 failed (${label}), giving up`, err);
   }
 
-  log(requestId, "gemini fallback", {});
-  return generateFallback(context);
+  logError(requestId, "gemini: all attempts failed", new Error("Gemini unavailable"));
+  return null;
 }

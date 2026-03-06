@@ -68,11 +68,17 @@ export const StockDailyContextSchema = z.object({
   }),
 
   events: z.object({
-    news: z.array(z.string()),
+    news: z.array(
+      z.object({
+        title: z.string(),
+        url: z.string().optional(),
+      })
+    ),
     disclosures: z.array(
       z.object({
         type: DisclosureType,
         title: z.string(),
+        url: z.string().optional(),
       })
     ),
   }),
@@ -83,10 +89,22 @@ export type StockDailyContext = z.infer<typeof StockDailyContextSchema>;
 
 // ── AI Analysis Response ──
 
+export const NewsItemSchema = z.object({
+  headline: z.string(),
+  impact: z.string(),
+});
+export type NewsItem = z.infer<typeof NewsItemSchema>;
+
 export const AiAnalysisSchema = z.object({
   summary: z.string(),
-  analysis: z.string(),
+  supplyAnalysis: z.string(),
+  macroAnalysis: z.string(),
+  eventAnalysis: z.string().optional(),
+  newsItems: z.array(NewsItemSchema).optional(),
   caution: z.string(),
+  // 하위 호환 (캐시된 구 스키마)
+  analysis: z.string().optional(),
+  newsSummary: z.string().optional(),
 });
 export type AiAnalysis = z.infer<typeof AiAnalysisSchema>;
 
@@ -136,10 +154,15 @@ export interface MacroData {
   nasdaqChange: number;
 }
 
+export interface NewsHeadline {
+  title: string;
+  url?: string;
+}
+
 export interface NewsData {
-  headlines: string[];
+  headlines: NewsHeadline[];
 }
 
 export interface DisclosureData {
-  disclosures: { type: "earnings" | "buyback" | "rights" | "other"; title: string }[];
+  disclosures: { type: "earnings" | "buyback" | "rights" | "other"; title: string; url?: string }[];
 }

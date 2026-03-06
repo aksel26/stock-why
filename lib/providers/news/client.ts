@@ -52,6 +52,8 @@ export class NaverNewsClient implements MarketDataProvider<NewsData> {
     }
 
     const data = (await res.json()) as NaverNewsResponse;
-    return mapNaverNews(data.items ?? []);
+    const result = mapNaverNews(data.items ?? []);
+    log(requestId, "naver:news:success", { code, newsCount: result.headlines.length });
+    return result;
   }
 }

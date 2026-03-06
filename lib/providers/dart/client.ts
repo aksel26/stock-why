@@ -62,6 +62,8 @@ export class DartClient implements MarketDataProvider<DisclosureData> {
       return { disclosures: [] };
     }
 
-    return mapDartDisclosures(data.list ?? []);
+    const result = mapDartDisclosures(data.list ?? []);
+    log(requestId, "dart:success", { code, disclosureCount: result.disclosures.length });
+    return result;
   }
 }

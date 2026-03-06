@@ -74,8 +74,8 @@ export class MockDartClient implements MarketDataProvider<DisclosureData> {
   async fetch(): Promise<DisclosureData> {
     return {
       disclosures: [
-        { type: "earnings", title: "2025년 4분기 실적 발표 (잠정)" },
-        { type: "buyback", title: "자기주식 취득 결정" },
+        { type: "earnings", title: "2025년 4분기 실적 발표 (잠정)", url: "https://dart.fss.or.kr/dsaf001/main.do?rcept_no=20250301000001" },
+        { type: "buyback", title: "자기주식 취득 결정", url: "https://dart.fss.or.kr/dsaf001/main.do?rcept_no=20250301000002" },
       ],
     };
   }
@@ -85,7 +85,10 @@ export class MockNaverNewsClient implements MarketDataProvider<NewsData> {
   async fetch({ code }: { code: string; date: string }): Promise<NewsData> {
     const raw = getDefault(mockNewsTitle, code);
     return {
-      headlines: raw.output.map((item) => item.news_titl),
+      headlines: raw.output.map((item) => ({
+        title: item.news_titl,
+        url: `https://search.naver.com/search.naver?query=${encodeURIComponent(item.news_titl)}`,
+      })),
     };
   }
 }

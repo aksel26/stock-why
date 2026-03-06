@@ -10,9 +10,14 @@ export function formatDateCompact(date: Date): string {
   return format(date, "yyyyMMdd");
 }
 
-/** 오늘 날짜를 YYYY-MM-DD로 반환 */
+/** 오늘 날짜를 YYYY-MM-DD로 반환 (KST 기준) */
 export function today(): string {
-  return formatDate(new Date());
+  return formatDate(toKST(new Date()));
+}
+
+/** UTC Date를 KST Date로 변환 */
+function toKST(date: Date): Date {
+  return new Date(date.getTime() + 9 * 60 * 60 * 1000);
 }
 
 /** 한국 장 운영 시간 여부 (09:00~15:30 KST) */

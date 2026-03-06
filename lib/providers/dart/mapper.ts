@@ -31,6 +31,7 @@ export function mapDartDisclosures(items: DartListItem[]): DisclosureData {
   const disclosures = items.map((item) => ({
     type: classifyReport(item.report_nm),
     title: item.report_nm,
+    url: `https://dart.fss.or.kr/dsaf001/main.do?rcept_no=${item.rcept_no}`,
   }));
 
   return { disclosures };

@@ -6,14 +6,20 @@ import {
   mapKisShort,
   mapKisCredit,
   mapKisDailyPrices,
+  mapKisTrendPrice,
+  mapKisTrendSupply,
   type KisPriceRaw,
   type KisSupplyRaw,
   type KisShortRaw,
   type KisCreditRaw,
   type KisDailyPriceRaw,
+  type KisTrendPriceRaw,
+  type KisTrendSupplyRaw,
 } from "./mapper";
+import { KIS_MAX_ITEMS_PER_CALL } from "../../config";
 import { log, logError } from "../../utils/logger";
 import { formatDateCompact } from "../../utils/date";
+import { throttleKis } from "./throttle";
 
 function getBaseUrl(): string {
   return process.env.KIS_BASE_URL ?? "https://openapi.koreainvestment.com:9443";
@@ -40,22 +46,31 @@ async function kisGet<T>(
     url.searchParams.set(k, v);
   }
 
-  const res = await fetch(url.toString(), {
-    headers: {
-      authorization: `Bearer ${token}`,
-      appkey: appKey,
-      appsecret: appSecret,
-      tr_id: trId,
-      "Content-Type": "application/json; charset=utf-8",
-    },
+  return throttleKis(async () => {
+    const res = await fetch(url.toString(), {
+      headers: {
+        authorization: `Bearer ${token}`,
+        appkey: appKey,
+        appsecret: appSecret,
+        tr_id: trId,
+        "Content-Type": "application/json; charset=utf-8",
+      },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`KIS API error [${trId}]: ${res.status} ${text}`);
+    }
+
+    const json = await res.json();
+
+    // KIS API returns HTTP 200 with business-level errors in body
+    if (json.rt_cd && json.rt_cd !== "0") {
+      throw new Error(`KIS API biz error [${trId}]: ${json.msg_cd} ${json.msg1}`);
+    }
+
+    return json as T;
   });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`KIS API error [${trId}]: ${res.status} ${text}`);
-  }
-
-  return res.json() as Promise<T>;
 }
 
 // ── Price Provider ──
@@ -66,7 +81,7 @@ export class KisPriceClient implements MarketDataProvider<PriceData> {
     log(requestId, "kis:price:fetch", { code, date });
 
     const dateCompact = date.replace(/-/g, "");
-    const data = await kisGet<{ output: KisPriceRaw }>(
+    const data = await kisGet<{ output: KisPriceRaw | KisPriceRaw[] }>(
       requestId,
       "/uapi/domestic-stock/v1/quotations/inquire-daily-price",
       {
@@ -80,7 +95,9 @@ export class KisPriceClient implements MarketDataProvider<PriceData> {
       "FHKST01010400"
     );
 
-    return mapKisPrice(data.output);
+    const result = mapKisPrice(data.output);
+    log(requestId, "kis:price:success", { code, close: result.close, changePercent: result.changePercent });
+    return result;
   }
 }
 
@@ -92,7 +109,7 @@ export class KisSupplyClient implements MarketDataProvider<SupplyData> {
     log(requestId, "kis:supply:fetch", { code, date });
 
     const dateCompact = date.replace(/-/g, "");
-    const data = await kisGet<{ output: KisSupplyRaw }>(
+    const data = await kisGet<{ output: KisSupplyRaw[] }>(
       requestId,
       "/uapi/domestic-stock/v1/quotations/inquire-investor",
       {
@@ -105,7 +122,9 @@ export class KisSupplyClient implements MarketDataProvider<SupplyData> {
       "FHKST01010900"
     );
 
-    return mapKisSupply(data.output);
+    const result = mapKisSupply(data.output[0]);
+    log(requestId, "kis:supply:success", { code, foreignNetBuy: result.foreignNetBuy, institutionNetBuy: result.institutionNetBuy });
+    return result;
   }
 }
 
@@ -131,7 +150,9 @@ export class KisShortClient implements MarketDataProvider<ShortData> {
       "FHKST03010100"
     );
 
-    return mapKisShort(data.output);
+    const result = mapKisShort(data.output);
+    log(requestId, "kis:short:success", { code, shortSellingVolume: result.shortSellingVolume, shortChangeRate: result.shortChangeRate });
+    return result;
   }
 }
 
@@ -157,7 +178,9 @@ export class KisCreditClient implements MarketDataProvider<CreditData> {
       "FHKST03010100"
     );
 
-    return mapKisCredit(data.output);
+    const result = mapKisCredit(data.output);
+    log(requestId, "kis:credit:success", { code, creditBalanceRate: result.creditBalanceRate });
+    return result;
   }
 }
 
@@ -185,5 +208,96 @@ export async function fetchDailyPrices(
     "FHKST03010100"
   );
 
-  return mapKisDailyPrices(data.output2 ?? []);
+  const result = mapKisDailyPrices(data.output2 ?? []);
+  log(requestId, "kis:dailyPrices:success", { code, count: result.length });
+  return result;
 }
+
+// ── Trend Data: Paginated fetch for period-based time series ──
+
+async function fetchPaginated<T>(
+  requestId: string,
+  path: string,
+  baseParams: Record<string, string>,
+  trId: string,
+  startDate: Date,
+  endDate: Date,
+  outputKey: string,
+): Promise<T[]> {
+  const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+  const chunks = Math.ceil(totalDays / KIS_MAX_ITEMS_PER_CALL);
+  const results: T[] = [];
+  let chunkEnd = endDate;
+
+  for (let i = 0; i < chunks; i++) {
+    const chunkStart = new Date(chunkEnd.getTime() - KIS_MAX_ITEMS_PER_CALL * 24 * 60 * 60 * 1000);
+    const effectiveStart = chunkStart < startDate ? startDate : chunkStart;
+
+    const params = {
+      ...baseParams,
+      FID_INPUT_DATE_1: formatDateCompact(effectiveStart),
+      FID_INPUT_DATE_2: formatDateCompact(chunkEnd),
+    };
+
+    const data = await kisGet<Record<string, T[]>>(requestId, path, params, trId);
+    const items = data[outputKey] ?? [];
+    results.push(...items);
+
+    chunkEnd = new Date(effectiveStart.getTime() - 24 * 60 * 60 * 1000);
+    if (chunkEnd < startDate) break;
+  }
+
+  return results;
+}
+
+export async function fetchTrendPrices(
+  code: string,
+  startDate: Date,
+  endDate: Date
+): Promise<{ date: string; close: number; changePercent: number }[]> {
+  const requestId = `kis-trend-price-${code}`;
+  log(requestId, "kis:trendPrice:fetch", { code });
+
+  const rawList = await fetchPaginated<KisTrendPriceRaw>(
+    requestId,
+    "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice",
+    {
+      FID_COND_MRKT_DIV_CODE: "J",
+      FID_INPUT_ISCD: code,
+      FID_PERIOD_DIV_CODE: "D",
+      FID_ORG_ADJ_PRC: "0",
+    },
+    "FHKST03010100",
+    startDate, endDate, "output2",
+  );
+
+  const result = mapKisTrendPrice(rawList);
+  log(requestId, "kis:trendPrice:success", { code, count: result.length });
+  return result;
+}
+
+export async function fetchTrendSupply(
+  code: string,
+  startDate: Date,
+  endDate: Date
+): Promise<{ date: string; foreignNetBuy: number; institutionNetBuy: number; individualNetBuy: number }[]> {
+  const requestId = `kis-trend-supply-${code}`;
+  log(requestId, "kis:trendSupply:fetch", { code });
+
+  const rawList = await fetchPaginated<KisTrendSupplyRaw>(
+    requestId,
+    "/uapi/domestic-stock/v1/quotations/inquire-investor",
+    {
+      FID_COND_MRKT_DIV_CODE: "J",
+      FID_INPUT_ISCD: code,
+      FID_PERIOD_DIV_CODE: "D",
+    },
+    "FHKST01010900",
+    startDate, endDate, "output",
+  );
+
+  const result = mapKisTrendSupply(rawList);
+  log(requestId, "kis:trendSupply:success", { code, count: result.length });
+  return result;
+}
+
