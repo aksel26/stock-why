@@ -12,6 +12,7 @@
 
 - **종목 검색** — 종목코드 또는 종목명으로 빠른 검색
 - **수급 분석 차트** — 외국인/기관/개인 순매수 추이를 오버레이 차트로 시각화
+- **수급 추세 분석** — 1주~1년 기간별 수급 추세 차트 + KPI (기간수익률, 연속 매수일수, 누적 순매수)
 - **Rule Engine (정량 분석)** — 수급 강도, 공매도, 신용잔고, 매크로 지표 기반 시그널 자동 감지
 - **AI 원인 분석** — Google Gemini 기반, 정량 시그널을 근거로 한 변동 원인 요약
 - **뉴스/공시 타임라인** — 관련 뉴스와 공시를 시간순으로 표시
@@ -21,15 +22,16 @@
 ```
 사용자 → Next.js (App Router)
            ↓
-      API Route (/api/stock/[code]/analysis)
-           ↓
-      Data Aggregator (KIS · DART · News · Macro)
-           ↓
-      Normalize → Rule Engine (1차 정량 판단)
-           ↓
-      Gemini AI (2차 원인 설명)
-           ↓
-      Upstash Redis Cache
+      ┌─ /api/stock/[code]/analysis ─┐   ┌─ /api/stock/[code]/trend ─┐
+      │  Data Aggregator             │   │  Trend Pipeline           │
+      │  (KIS · DART · News · Macro) │   │  (KIS 일별시세 · 수급)    │
+      │         ↓                    │   │         ↓                 │
+      │  Normalize → Rule Engine     │   │  KPI 계산 + 시계열 정규화 │
+      │         ↓                    │   └───────────────────────────┘
+      │  Gemini AI (원인 설명)       │
+      └──────────────────────────────┘
+                    ↓
+            Upstash Redis Cache
 ```
 
 ### 핵심 원칙
@@ -123,6 +125,7 @@ stockwhy/
 ├── lib/
 │   ├── providers/             # 외부 API 클라이언트 (KIS, DART, News, Macro)
 │   ├── domain/                # 스키마, 정규화, 룰엔진
+│   ├── trend/                 # 수급 추세 파이프라인, KPI, 스키마
 │   ├── ai/                    # Gemini 호출, 프롬프트, 폴백
 │   ├── cache/                 # Redis 클라이언트, 키 빌더
 │   └── utils/                 # 유틸리티 (날짜, 포맷, 로거)
@@ -146,6 +149,46 @@ stockwhy/
   "meta": { "cache": "hit|miss", "generatedAt": "..." }
 }
 ```
+
+### GET `/api/stock/[code]/trend`
+
+기간별 수급 추세 시계열과 KPI를 반환합니다.
+
+**Query Parameters:**
+- `period` (선택) — `1W` | `1M` | `3M` | `6M` | `1Y` (기본값: `1M`)
+
+**Response:**
+```json
+{
+  "kpi": {
+    "foreignNetBuyTotal": 125000,
+    "institutionNetBuyTotal": -30000,
+    "individualNetBuyTotal": -95000,
+    "foreignConsecutiveDays": 5,
+    "institutionConsecutiveDays": -2,
+    "priceReturn": 3.2
+  },
+  "series": [
+    { "date": "2026-03-05", "close": 72000, "changePercent": 1.2, "foreignNetBuy": 25000, "institutionNetBuy": -6000, "individualNetBuy": -19000 }
+  ],
+  "meta": { "period": "1M", "startDate": "2026-02-06", "endDate": "2026-03-06", "cache": "miss" }
+}
+```
+
+## 캐시 전략
+
+Upstash Redis를 사용하며, 장중/장외에 따라 TTL이 달라집니다.
+
+| 캐시 대상 | 장중 TTL | 장외 TTL | 설명 |
+|-----------|---------|---------|------|
+| 종목 컨텍스트 (`context:`) | 5분 | 1시간 | 가격/수급/시그널 등 전체 분석 결과 |
+| AI 분석 (`ai:`) | 1시간 | 1시간 | Gemini 응답 |
+| 20일 평균 (`avg20:`) | 24시간 | 24시간 | 일별 종가 배열 |
+| KIS 토큰 (`kis:token`) | 23시간 | 23시간 | OAuth 토큰 (만료 24h 전 갱신) |
+
+- 장중 판단: `isMarketOpen()` — 평일 09:00~15:30 KST
+- 캐시 키 패턴: `{타입}:{종목코드}:{날짜}` (예: `context:005930:2026-03-06`)
+- Mock 모드(`USE_MOCK=true`)에서는 캐시를 사용하지 않음
 
 ## 참고 문서
 
